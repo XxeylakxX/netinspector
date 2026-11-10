@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NetPulse - Network Interface Inspector</title>
+  <link rel="icon" type="image/png" href="icon.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="orb o1"></div>
+  <div class="orb o2"></div>
+  <div class="orb o3"></div>
+
+  <div class="app">
+    <!-- Title bar (draggable) -->
+    <header class="titlebar">
+      <div class="brand">
+        <div class="logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+        </div>
+        <div>
+          <h1>Network Inspector</h1>
+          <p id="subtitle">Scanning your interfaces…</p>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn ghost" id="btnRefresh" title="Refresh (F5)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+          Refresh
+        </button>
+        <button class="btn ghost" id="btnCopyAll" title="Copy everything">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+          Copy
+        </button>
+        <button class="btn router-btn" id="btnDNSModal" title="DNS Presets & IP Configuration Tools">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          DNS &amp; IP
+        </button>
+        <button class="btn router-btn" id="btnRouter" title="PLDT Router Portal & Locations">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12a10 10 0 0 1 20 0M5 15a6 6 0 0 1 14 0M8.5 18a2 2 0 0 1 7 0"/><circle cx="12" cy="21" r="1" fill="currentColor"/></svg>
+          PLDT Router
+        </button>
+        <button class="btn router-btn" id="btnSpeedtest" title="Speedtest (Fast.com & Ookla)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="2"/></svg>
+          Speedtest
+        </button>
+        <button class="btn exit" id="btnExit" title="Exit (Ctrl+Q)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+          Exit
+        </button>
+        <div class="winctl">
+          <button id="wMin" title="Minimise"><svg viewBox="0 0 24 24"><path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+          <button id="wMax" title="Maximise"><svg viewBox="0 0 24 24" fill="none"><rect x="5" y="5" width="14" height="14" rx="2" stroke="currentColor" stroke-width="2"/></svg></button>
+          <button id="wClose" class="close" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+        </div>
+      </div>
+    </header>
+
+    <main class="content">
+      <!-- Adapters -->
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Active adapters</h2>
+          <span class="count" id="adapterCount">–</span>
+        </div>
+        <div class="scroll" id="adapters"></div>
+      </section>
+
+      <!-- Network Test Panel (Ping & Speedtest Switchable) -->
+      <section class="panel" id="testPanel">
+        <div class="panel-head">
+          <div class="panel-tabs">
+            <button class="panel-tab active" id="tabPing" title="Ping Check">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              <span>Ping</span>
+            </button>
+            <button class="panel-tab" id="tabSpeedtest" title="Speedtest (Fast.com & Ookla)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="2"/></svg>
+              <span>Speedtest</span>
+            </button>
+          </div>
+          <div class="panel-status-slot">
+            <span class="live" id="liveTag"><i></i>Idle</span>
+            <span class="st-status-badge" id="stStatusBadge" style="display: none;">Idle</span>
+          </div>
+        </div>
+
+        <!-- Ping View -->
+        <div class="panel-view active" id="pingView">
+          <div class="glass ping-card">
+            <div class="ping-input">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+              <input id="host" type="text" value="8.8.8.8" spellcheck="false" autocomplete="off" placeholder="IP address or hostname" />
+              <button class="btn primary" id="btnPing">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                <span>Start</span>
+              </button>
+            </div>
+
+            <div class="ping-opts">
+              <div class="chips" id="targets">
+                <button class="tchip" data-target="gateway">Gateway</button>
+                <button class="tchip" data-target="1.1.1.1">Cloudflare</button>
+                <button class="tchip" data-target="8.8.8.8">Google DNS</button>
+                <button class="tchip" data-target="google.com">google.com</button>
+              </div>
+              <div class="seg" id="countSeg">
+                <button data-count="4" class="on">4</button>
+                <button data-count="10">10</button>
+                <button data-count="25">25</button>
+                <button data-count="0" title="Continuous">∞</button>
+              </div>
+            </div>
+
+            <div class="readout">
+              <div class="big">
+                <span id="lastMs">–</span><small>ms</small>
+              </div>
+              <div class="verdict" id="verdict">Ready</div>
+            </div>
+
+            <div class="spark">
+              <svg id="spark" viewBox="0 0 400 90" preserveAspectRatio="none"></svg>
+            </div>
+
+            <div class="stats">
+              <div><b id="sSent">0</b><span>Sent</span></div>
+              <div><b id="sRecv">0</b><span>Received</span></div>
+              <div><b id="sLoss">0%</b><span>Loss</span></div>
+              <div><b id="sMin">–</b><span>Min</span></div>
+              <div><b id="sAvg">–</b><span>Avg</span></div>
+              <div><b id="sMax">–</b><span>Max</span></div>
+            </div>
+          </div>
+
+          <div class="log-head">
+            <span>Ping Output</span>
+            <button class="link" id="btnClear">Clear</button>
+          </div>
+          <div class="log glass" id="log"></div>
+        </div>
+
+        <!-- Speedtest View -->
+        <div class="panel-view" id="speedtestView">
+          <div class="glass speedtest-panel-card">
+            <!-- Controls Bar -->
+            <div class="speedtest-controls-bar">
+              <div class="st-ctrl-row">
+                <div class="st-ctrl-group">
+                  <label>Provider / Engine</label>
+                  <select id="stEngineSelect" class="dns-select">
+                    <option value="fast" selected>Fast.com (Netflix)</option>
+                    <option value="ookla">Speedtest by Ookla</option>
+                  </select>
+                </div>
+                <div class="st-ctrl-group">
+                  <label>Interface / Adapter</label>
+                  <select id="stAdapterSelect" class="dns-select"></select>
+                </div>
+              </div>
+              <div class="st-ctrl-group" id="stServerGroup">
+                <label>Server</label>
+                <select id="stServerSelect" class="dns-select">
+                  <option value="0">Auto (Nearest Optimal Server)</option>
+                </select>
+              </div>
+              <div class="st-ctrl-btn">
+                <button class="btn primary" id="btnStartSpeedtest">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  <span>Start Speedtest</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Metrics Grid -->
+            <div class="st-metrics-grid">
+              <!-- Download -->
+              <div class="st-metric-card" id="stCardDownload">
+                <div class="st-metric-head">
+                  <span class="st-metric-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+                    Download
+                  </span>
+                  <span class="st-metric-unit">Mbps</span>
+                </div>
+                <div class="st-metric-val" id="stDownloadVal">–</div>
+                <div class="st-bar-track">
+                  <div class="st-bar-fill download" id="stDownloadBar" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <!-- Upload -->
+              <div class="st-metric-card" id="stCardUpload">
+                <div class="st-metric-head">
+                  <span class="st-metric-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                    Upload
+                  </span>
+                  <span class="st-metric-unit">Mbps</span>
+                </div>
+                <div class="st-metric-val" id="stUploadVal">–</div>
+                <div class="st-bar-track">
+                  <div class="st-bar-fill upload" id="stUploadBar" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <!-- Ping & Jitter -->
+              <div class="st-metric-card">
+                <div class="st-metric-head">
+                  <span class="st-metric-label">Latency &amp; Loss</span>
+                  <span class="st-metric-unit">ms</span>
+                </div>
+                <div class="st-split-row">
+                  <div>
+                    <span class="st-sub-label">Ping</span>
+                    <b id="stPingVal">–</b>
+                  </div>
+                  <div>
+                    <span class="st-sub-label">Jitter</span>
+                    <b id="stJitterVal">–</b>
+                  </div>
+                  <div>
+                    <span class="st-sub-label">Loss</span>
+                    <b id="stLossVal">0%</b>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Connection Info & Result -->
+              <div class="st-metric-card">
+                <div class="st-metric-head">
+                  <span class="st-metric-label">Connection</span>
+                </div>
+                <div class="st-info-list">
+                  <div><span>Server:</span><b id="stServerInfo">Auto-selecting…</b></div>
+                  <div><span>ISP:</span><b id="stIspInfo">–</b></div>
+                  <div id="stResultRow" style="display: none;">
+                    <span>Result:</span>
+                    <a id="stResultLink" href="#" target="_blank">Speedtest.net ↗</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="log-head">
+            <span>Speedtest Output</span>
+            <button class="link" id="btnClearSpeedtestTerminal">Clear</button>
+          </div>
+          <div class="log glass" id="stTerminalBox">
+            <pre class="terminal-output" id="stTerminalOutput">Ready. Click 'Start Speedtest' to begin testing.</pre>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- PLDT Router Modal -->
+  <div class="modal-backdrop" id="routerModal" style="display: none;">
+    <div class="modal-card glass">
+      <div class="modal-header">
+        <div class="modal-title">
+          <div class="modal-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+              <line x1="6" y1="6" x2="6.01" y2="6"/>
+              <line x1="6" y1="18" x2="6.01" y2="18"/>
+            </svg>
+          </div>
+          <div>
+            <h3>PLDT Router Portal & Locations</h3>
+            <p>Location selector, fast auto-login & default browser</p>
+          </div>
+        </div>
+        <button class="btn-icon" id="btnCloseRouterModal" title="Close">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-toolbar">
+          <div class="modal-toolbar-left">
+            <button class="btn primary small" id="btnAddLocation">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              Add Location
+            </button>
+          </div>
+          <div class="modal-toolbar-right">
+            <span class="loc-count" id="locCount">1 location</span>
+          </div>
+        </div>
+
+        <!-- Location Form (Add/Edit) -->
+        <div class="location-form glass" id="locationForm" style="display: none;">
+          <h4 id="locFormTitle">Add New Location</h4>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Location Name</label>
+              <input type="text" id="locName" placeholder="e.g. Home, Office, Living Room" />
+            </div>
+            <div class="form-group">
+              <label>Username</label>
+              <input type="text" id="locUser" value="admin" />
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="locPass" placeholder="Router password" />
+            </div>
+            <div class="form-group">
+              <label>Login URL</label>
+              <input type="text" id="locUrl" value="http://192.168.1.1/html/login_pldt.html" />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn primary small" id="btnSaveLocation">Save Location</button>
+            <button class="btn ghost small" id="btnCancelLocation">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Location Cards List -->
+        <div class="router-locations-list" id="routerLocationsList">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DNS & IP Tools Modal -->
+  <div class="modal-backdrop" id="dnsModal" style="display: none;">
+    <div class="modal-card glass dns-modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <div class="modal-icon dns-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M2 12h20"/>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+          </div>
+          <div>
+            <h3>DNS &amp; IP Configuration</h3>
+            <p>Manage DNS presets, custom servers &amp; execute ipconfig actions</p>
+          </div>
+        </div>
+        <button class="btn-icon" id="btnCloseDNSModal" title="Close">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Target Adapter Selection -->
+        <div class="dns-section">
+          <div class="dns-field-label">Target Network Interface</div>
+          <div class="dns-adapter-row">
+            <select id="dnsAdapterSelect" class="dns-select"></select>
+            <button class="btn ghost small" id="btnRefreshAdaptersInModal" title="Refresh Adapters">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Presets Selection Shelf -->
+        <div class="dns-section">
+          <div class="dns-section-head">
+            <div class="dns-field-label">DNS Presets &amp; Templates</div>
+            <button class="btn ghost small" id="btnToggleSavePreset" title="Save current inputs as a preset">
+              + Save as Preset
+            </button>
+          </div>
+          <div class="dns-presets-grid" id="dnsPresetGrid">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Save Custom Preset Box (Collapsible) -->
+        <div class="preset-save-box glass" id="presetSaveBox" style="display: none;">
+          <div class="preset-save-title">Save Custom DNS Preset</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Preset Name</label>
+              <input type="text" id="customPresetName" placeholder="e.g. NextDNS, Work VPN, Gaming DNS" />
+            </div>
+            <div class="form-group">
+              <label>DoH Template URL (Optional)</label>
+              <input type="text" id="customPresetDoh" placeholder="e.g. https://dns.nextdns.io/xxxxxx" spellcheck="false" />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn primary small" id="btnConfirmSavePreset">Save Preset</button>
+            <button class="btn ghost small" id="btnCancelSavePreset">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Configuration Form -->
+        <div class="dns-section dns-config-box glass">
+          <div class="dns-mode-toggle">
+            <label class="dns-radio-label">
+              <input type="radio" name="dnsMode" id="modeDhcp" value="dhcp" />
+              <span>Automatic (DHCP)</span>
+            </label>
+            <label class="dns-radio-label">
+              <input type="radio" name="dnsMode" id="modeStatic" value="static" checked />
+              <span>Manual / Custom Static DNS</span>
+            </label>
+          </div>
+
+          <div class="form-grid" id="dnsStaticInputs">
+            <div class="form-group">
+              <label>Preferred DNS (Primary)</label>
+              <input type="text" id="dnsPrimary" placeholder="e.g. 1.1.1.1 or 8.8.8.8" spellcheck="false" />
+            </div>
+            <div class="form-group">
+              <label>Alternative DNS (Secondary)</label>
+              <input type="text" id="dnsSecondary" placeholder="e.g. 1.0.0.1 or 8.8.4.4" spellcheck="false" />
+            </div>
+            <div class="form-group" style="grid-column: span 2;">
+              <div class="doh-label-row">
+                <label>DNS-over-HTTPS (DoH) Template</label>
+                <span class="doh-badge-pill">🔒 Encrypted DNS</span>
+              </div>
+              <input type="text" id="dnsDohTemplate" placeholder="e.g. https://cloudflare-dns.com/dns-query or https://dns.nextdns.io/xxxxxx" spellcheck="false" />
+              <div class="doh-template-chips" id="dohChips">
+                <button type="button" class="doh-chip" data-doh="https://cloudflare-dns.com/dns-query">Cloudflare</button>
+                <button type="button" class="doh-chip" data-doh="https://dns.google/dns-query">Google</button>
+                <button type="button" class="doh-chip" data-doh="https://dns.quad9.net/dns-query">Quad9</button>
+                <button type="button" class="doh-chip" data-doh="https://dns.adguard-dns.com/dns-query">AdGuard</button>
+                <button type="button" class="doh-chip" data-doh="https://doh.opendns.com/dns-query">OpenDNS</button>
+                <button type="button" class="doh-chip" data-doh="https://dns.nextdns.io/">NextDNS</button>
+                <button type="button" class="doh-chip doh-clear" data-doh="">Clear</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="dns-apply-bar">
+            <span class="dns-status-tip" id="dnsApplyTip">Requires admin privileges if not elevated. UAC will prompt if needed.</span>
+            <button class="btn primary" id="btnApplyDNS">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Apply DNS to Interface
+            </button>
+          </div>
+        </div>
+
+        <!-- IPConfig Tools Section -->
+        <div class="dns-section ipconfig-section">
+          <div class="dns-section-head">
+            <div class="dns-field-label">IP Configuration Commands (ipconfig)</div>
+          </div>
+          <div class="ipconfig-btn-group">
+            <button class="btn ghost small ip-btn" id="btnIpRenew" title="Renew DHCP IP Lease (ipconfig /renew)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+              ipconfig /renew
+            </button>
+            <button class="btn ghost small ip-btn" id="btnIpRelease" title="Release DHCP IP Lease (ipconfig /release)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+              ipconfig /release
+            </button>
+            <button class="btn ghost small ip-btn" id="btnIpFlushDns" title="Purge DNS Cache (ipconfig /flushdns)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              ipconfig /flushdns
+            </button>
+          </div>
+
+          <!-- Console Output Box -->
+          <div class="ipconfig-terminal glass" id="ipconfigTerminal">
+            <div class="terminal-bar">
+              <span>Command Terminal Output</span>
+              <button class="link" id="btnClearTerminal">Clear</button>
+            </div>
+            <pre class="terminal-output" id="terminalOutput">Ready. Select an adapter or command to execute.</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="toasts" id="toasts"></div>
+  <script src="main.js"></script>
+</body>
+</html>

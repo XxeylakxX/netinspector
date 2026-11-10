@@ -1,0 +1,68 @@
+name: Build & Package Windows Executable
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Publish release asset if tag or version is provided'
+        required: false
+        type: boolean
+        default: false
+      tag_name:
+        description: 'Release tag name (e.g., v1.0.0)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  build:
+    name: Build Wails (Windows AMD64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+          check-latest: true
+          cache: true
+
+      - name: Install Wails CLI
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          echo "$HOME/go/bin" >> $env:GITHUB_PATH
+
+      - name: Build Wails Application (Optimized)
+        run: |
+          wails build -clean -trimpath -ldflags="-s -w"
+
+      - name: Verify Executable
+        run: |
+          if (!(Test-Path "build\bin\NetworkInspector.exe")) {
+            Write-Error "Expected binary build\bin\NetworkInspector.exe was not created!"
+            exit 1
+          }
+          Get-Item "build\bin\NetworkInspector.exe" | Select-Object Name, Length, LastWriteTime
+
+      - name: Upload Binary Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetworkInspector-Windows-x64
+          path: build/bin/NetworkInspector.exe
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.create_release == true && inputs.tag_name != '' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/bin/NetworkInspector.exe
+          tag_name: ${{ github.event.inputs.tag_name }}
+          name: Release ${{ github.event.inputs.tag_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
