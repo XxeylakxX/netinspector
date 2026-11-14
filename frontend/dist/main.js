@@ -95,7 +95,7 @@ function adapterCard(a, i) {
            <div><span>Channel Width</span><b>${esc(wifi.channelWidth || "–")}</b></div>
            <div><span>Receive</span><b>${esc(wifi.rxRate || "–")} Mbps</b></div>
            <div><span>Transmit</span><b>${esc(wifi.txRate || "–")} Mbps</b></div>
-           <div><span>Signal</span><b style="display:flex;gap:8px;align-items:center">${esc(wifi.signal || "–")} ${signalBars(wifi.signal)}</b></div>
+           <div><span>Signal</span><b style="display:flex;gap:8px;align-items:center"><span>${esc(wifi.signal || "–")}${wifi.signalDbm ? ` <span class="sig-dbm">(${esc(wifi.signalDbm)})</span>` : ""}</span> ${signalBars(wifi.signal)}</b></div>
            <div class="wifi-span-all"><span>Security</span><b>${esc(wifi.auth || "–")}</b></div>
          </div>
        </div>`
@@ -170,7 +170,7 @@ function adaptersAsText() {
       if (a.isWifi && a.wifi) {
         const w = a.wifi;
         L.push("--- Wi-Fi ---", `SSID      : ${w.ssid}`, `Standard  : ${w.standard}`, `Frequency : ${w.band}`,
-          `Channel   : ${w.channel}`, `Width     : ${w.channelWidth || "–"}`, `Speed R/T : ${w.rxRate} / ${w.txRate} Mbps`, `Signal    : ${w.signal}`);
+          `Channel   : ${w.channel}`, `Width     : ${w.channelWidth || "–"}`, `Speed R/T : ${w.rxRate} / ${w.txRate} Mbps`, `Signal    : ${w.signal}${w.signalDbm ? ` (${w.signalDbm})` : ""}`);
       }
       return L.join("\n");
     })

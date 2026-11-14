@@ -73,6 +73,7 @@ type WiFi struct {
 	RxRate       string `json:"rxRate"`
 	TxRate       string `json:"txRate"`
 	Signal       string `json:"signal"`
+	SignalDbm    string `json:"signalDbm,omitempty"`
 	Auth         string `json:"auth"`
 }
 
@@ -164,15 +165,35 @@ func wlanInfo() *WiFi {
 	if bssid == "" {
 		bssid = grab(`BSSID`)
 	}
+	ssid := grab(`SSID`)
+	signal := grab(`Signal`)
+	rawRssi := grab(`Rssi`)
+
+	signalDbm := ""
+	if rawRssi != "" {
+		cleanRssi := strings.TrimSpace(rawRssi)
+		if !strings.HasSuffix(strings.ToLower(cleanRssi), "dbm") {
+			signalDbm = cleanRssi + " dBm"
+		} else {
+			signalDbm = cleanRssi
+		}
+	} else if signal != "" {
+		pctStr := strings.TrimSpace(strings.TrimSuffix(signal, "%"))
+		if pct, err := strconv.Atoi(pctStr); err == nil {
+			signalDbm = fmt.Sprintf("%d dBm", (pct/2)-100)
+		}
+	}
+
 	w := &WiFi{
-		SSID:         grab(`SSID`),
+		SSID:         ssid,
 		Standard:     wifiGeneration(radio),
 		Band:         grab(`Band`),
 		Channel:      grab(`Channel`),
-		ChannelWidth: queryChannelWidth(bssid),
+		ChannelWidth: queryChannelWidth(bssid, ssid),
 		RxRate:       grab(`Receive rate \(Mbps\)`),
 		TxRate:       grab(`Transmit rate \(Mbps\)`),
-		Signal:       grab(`Signal`),
+		Signal:       signal,
+		SignalDbm:    signalDbm,
 		Auth:         grab(`Authentication`),
 	}
 	if w.SSID == "" && radio == "" {

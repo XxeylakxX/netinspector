@@ -9,6 +9,7 @@ export namespace main {
 	    rxRate: string;
 	    txRate: string;
 	    signal: string;
+	    signalDbm?: string;
 	    auth: string;
 	
 	    static createFrom(source: any = {}) {
@@ -25,6 +26,7 @@ export namespace main {
 	        this.rxRate = source["rxRate"];
 	        this.txRate = source["txRate"];
 	        this.signal = source["signal"];
+	        this.signalDbm = source["signalDbm"];
 	        this.auth = source["auth"];
 	    }
 	}

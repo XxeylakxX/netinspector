@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 	"unsafe"
 )
@@ -26,6 +27,10 @@ var (
 	procWlanEnumInterfaces    = modwlanapi.NewProc("WlanEnumInterfaces")
 	procWlanGetNetworkBssList = modwlanapi.NewProc("WlanGetNetworkBssList")
 	procWlanFreeMemory        = modwlanapi.NewProc("WlanFreeMemory")
+	procWlanScan              = modwlanapi.NewProc("WlanScan")
+
+	channelWidthMu sync.RWMutex
+	cachedWidths   = make(map[string]string)
 )
 
 type wlanGUID struct {
@@ -49,7 +54,26 @@ type wlanInterfaceInfoList struct {
 
 // queryChannelWidth retrieves the channel bandwidth (e.g. "20 MHz", "40 MHz", "80 MHz", "160 MHz", "320 MHz")
 // for the connected Wi-Fi interface using Windows Native Wifi API (WlanGetNetworkBssList) and beacon IEs.
-func queryChannelWidth(targetBssid string) string {
+func queryChannelWidth(targetBssid, targetSsid string) string {
+	normTarget := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(targetBssid), "-", ":"))
+	normSsid := strings.ToLower(strings.TrimSpace(targetSsid))
+
+	// Fast cache lookup (instant 0ms response on subsequent calls)
+	channelWidthMu.RLock()
+	if normTarget != "" {
+		if w, ok := cachedWidths[normTarget]; ok && w != "" {
+			channelWidthMu.RUnlock()
+			return w
+		}
+	}
+	if normSsid != "" {
+		if w, ok := cachedWidths[normSsid]; ok && w != "" {
+			channelWidthMu.RUnlock()
+			return w
+		}
+	}
+	channelWidthMu.RUnlock()
+
 	if procWlanOpenHandle.Find() != nil {
 		return ""
 	}
@@ -80,7 +104,7 @@ func queryChannelWidth(targetBssid string) string {
 		return ""
 	}
 
-	normTarget := strings.ToLower(strings.ReplaceAll(targetBssid, "-", ":"))
+	const bssEntryFixedSize = 360 // Fixed sizeof(WLAN_BSS_ENTRY) on 64-bit Windows
 
 	for i := uint32(0); i < ifList.dwNumberOfItems; i++ {
 		info := (*wlanInterfaceInfo)(unsafe.Pointer(pIfList + 8 + uintptr(i)*532))
@@ -103,47 +127,76 @@ func queryChannelWidth(targetBssid string) string {
 		totalSize := *(*uint32)(unsafe.Pointer(pBssList))
 		numItems := *(*uint32)(unsafe.Pointer(pBssList + 4))
 
-		currEntryPtr := pBssList + 8
-		listEnd := pBssList + uintptr(totalSize)
+		// If cache is empty, trigger non-blocking scan so subsequent queries succeed
+		if numItems == 0 {
+			procWlanFreeMemory.Call(pBssList)
+			procWlanScan.Call(clientHandle, uintptr(unsafe.Pointer(&guid)), 0, 0, 0)
+			continue
+		}
 
+		listEnd := pBssList + uintptr(totalSize)
+		var matchedWidth string
 		var fallbackWidth string
 
-		for j := uint32(0); j < numItems && currEntryPtr < listEnd; j++ {
-			entrySlice := unsafe.Slice((*byte)(unsafe.Pointer(currEntryPtr)), 0x168)
+		// Iterate using the correct contiguous 360-byte stride
+		for j := uint32(0); j < numItems; j++ {
+			entryPtr := pBssList + 8 + uintptr(j)*bssEntryFixedSize
+			if entryPtr+bssEntryFixedSize > listEnd {
+				break
+			}
+
+			entrySlice := unsafe.Slice((*byte)(unsafe.Pointer(entryPtr)), bssEntryFixedSize)
 			bssidBytes := entrySlice[0x28 : 0x28+6]
 			bssidStr := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x",
 				bssidBytes[0], bssidBytes[1], bssidBytes[2], bssidBytes[3], bssidBytes[4], bssidBytes[5])
 
+			ssidLen := binary.LittleEndian.Uint32(entrySlice[0:4])
+			entrySsid := ""
+			if ssidLen > 0 && ssidLen <= 32 {
+				entrySsid = strings.TrimSpace(string(entrySlice[4 : 4+ssidLen]))
+			}
+
 			ulIeOffset := binary.LittleEndian.Uint32(entrySlice[0x160 : 0x164])
 			ulIeSize := binary.LittleEndian.Uint32(entrySlice[0x164 : 0x168])
 
-			match := (normTarget != "" && normTarget == bssidStr)
-			if ulIeOffset > 0 && ulIeSize > 0 && currEntryPtr+uintptr(ulIeOffset+ulIeSize) <= listEnd {
-				fullEntry := unsafe.Slice((*byte)(unsafe.Pointer(currEntryPtr)), uintptr(ulIeOffset+ulIeSize))
+			if ulIeOffset > 0 && ulIeSize > 0 && entryPtr+uintptr(ulIeOffset+ulIeSize) <= listEnd {
+				fullEntry := unsafe.Slice((*byte)(unsafe.Pointer(entryPtr)), uintptr(ulIeOffset+ulIeSize))
 				ies := fullEntry[ulIeOffset : ulIeOffset+ulIeSize]
 				width := parseChannelWidthFromIEs(ies)
-				if match {
-					procWlanFreeMemory.Call(pBssList)
-					return width
+
+				// Match by exact BSSID
+				if normTarget != "" && normTarget == bssidStr {
+					matchedWidth = width
+					break
 				}
-				if fallbackWidth == "" {
+				// Match by exact SSID
+				if normSsid != "" && strings.EqualFold(normSsid, entrySsid) {
+					matchedWidth = width
+				}
+				// Capture first valid parsed channel width as fallback
+				if fallbackWidth == "" && width != "" {
 					fallbackWidth = width
 				}
 			}
-
-			nextOffset := uintptr(ulIeOffset + ulIeSize)
-			if nextOffset%8 != 0 {
-				nextOffset += (8 - (nextOffset % 8))
-			}
-			if nextOffset < 0x168 {
-				break
-			}
-			currEntryPtr += nextOffset
 		}
 
 		procWlanFreeMemory.Call(pBssList)
-		if fallbackWidth != "" && normTarget == "" {
-			return fallbackWidth
+
+		res := matchedWidth
+		if res == "" {
+			res = fallbackWidth
+		}
+
+		if res != "" {
+			channelWidthMu.Lock()
+			if normTarget != "" {
+				cachedWidths[normTarget] = res
+			}
+			if normSsid != "" {
+				cachedWidths[normSsid] = res
+			}
+			channelWidthMu.Unlock()
+			return res
 		}
 	}
 
