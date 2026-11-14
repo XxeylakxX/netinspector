@@ -146,6 +146,9 @@ func wifiGeneration(radio string) string {
 }
 
 func wlanInfo() *WiFi {
+	if native := nativeWlanInfo(); native != nil {
+		return native
+	}
 	cmd := exec.Command("netsh", "wlan", "show", "interfaces")
 	hideWindow(cmd)
 	raw, err := cmd.Output()

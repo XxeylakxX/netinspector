@@ -86,28 +86,28 @@ function adapterCard(a, i) {
   const wifiBox = wifi
     ? `<div class="wifi-box">
          <div class="wifi-head">
-           <b>${esc(wifi.ssid || "Wi-Fi")}</b>
-           <span class="gen">${esc(wifi.standard)}</span>
+           <b class="wifi-ssid">${esc(wifi.ssid || "Wi-Fi")}</b>
+           <span class="gen wifi-gen">${esc(wifi.standard)}</span>
          </div>
          <div class="wifi-grid">
-           <div><span>Frequency</span><b>${esc(wifi.band || "–")}</b></div>
-           <div><span>Channel</span><b>${esc(wifi.channel || "–")}</b></div>
-           <div><span>Channel Width</span><b>${esc(wifi.channelWidth || "–")}</b></div>
-           <div><span>Receive</span><b>${esc(wifi.rxRate || "–")} Mbps</b></div>
-           <div><span>Transmit</span><b>${esc(wifi.txRate || "–")} Mbps</b></div>
-           <div><span>Signal</span><b style="display:flex;gap:8px;align-items:center"><span>${esc(wifi.signal || "–")}${wifi.signalDbm ? ` <span class="sig-dbm">(${esc(wifi.signalDbm)})</span>` : ""}</span> ${signalBars(wifi.signal)}</b></div>
-           <div class="wifi-span-all"><span>Security</span><b>${esc(wifi.auth || "–")}</b></div>
+           <div><span>Frequency</span><b class="wifi-band">${esc(wifi.band || "–")}</b></div>
+           <div><span>Channel</span><b class="wifi-channel">${esc(wifi.channel || "–")}</b></div>
+           <div><span>Channel Width</span><b class="wifi-width">${esc(wifi.channelWidth || "–")}</b></div>
+           <div><span>Receive</span><b class="wifi-rx">${esc(wifi.rxRate || "–")} Mbps</b></div>
+           <div><span>Transmit</span><b class="wifi-tx">${esc(wifi.txRate || "–")} Mbps</b></div>
+           <div><span>Signal</span><b class="wifi-sig" style="display:flex;gap:8px;align-items:center"><span>${esc(wifi.signal || "–")}${wifi.signalDbm ? ` <span class="sig-dbm">(${esc(wifi.signalDbm)})</span>` : ""}</span> ${signalBars(wifi.signal)}</b></div>
+           <div class="wifi-span-all"><span>Security</span><b class="wifi-auth">${esc(wifi.auth || "–")}</b></div>
          </div>
        </div>`
     : "";
 
-  return `<article class="card" style="animation-delay:${i * 70}ms">
+  return `<article class="card" data-alias="${esc(a.alias)}" style="animation-delay:${i * 70}ms">
     <div class="card-top">
       <div class="ico ${a.isWifi ? "wifi" : ""}">${a.isWifi ? ICON_WIFI : ICON_ETH}</div>
       <div class="card-title"><b>${esc(a.alias)}</b><span title="${esc(a.desc)}">${esc(a.desc)}</span></div>
-      <span class="badge">${esc(a.status || "Up")}</span>
+      <span class="badge status-badge">${esc(a.status || "Up")}</span>
     </div>
-    <dl class="rows">${rows}</dl>
+    <dl class="rows" data-rows="${esc(a.alias)}">${rows}</dl>
     ${wifiBox}
     <div class="adapter-actions">
       <button class="btn-xs speed-act" data-action="speedtest" data-alias="${esc(a.alias)}" title="Run Speedtest on ${esc(a.alias)}">
@@ -130,29 +130,137 @@ function adapterCard(a, i) {
   </article>`;
 }
 
-async function refresh() {
+let autoRefreshInterval = 3000;
+let autoRefreshTimer = null;
+let autoRefreshPaused = false;
+
+function setAutoRefresh(interval) {
+  autoRefreshInterval = interval;
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer);
+    autoRefreshTimer = null;
+  }
+  const btn = $("btnAutoRefresh");
+  const lbl = $("autoRefreshLabel");
+  if (!btn || !lbl) return;
+
+  if (interval === 0) {
+    btn.className = "auto-btn off";
+    btn.title = "Live Refresh: OFF (Click to switch to 3s)";
+    lbl.textContent = "Live: OFF";
+  } else {
+    btn.className = "auto-btn on";
+    btn.title = `Live Refresh: ${interval / 1000}s (Click to cycle 5s, Off)`;
+    lbl.textContent = `Live: ${interval / 1000}s`;
+    startAutoRefreshTimer();
+  }
+}
+
+function cycleAutoRefresh() {
+  if (autoRefreshInterval === 3000) {
+    setAutoRefresh(5000);
+  } else if (autoRefreshInterval === 5000) {
+    setAutoRefresh(0);
+  } else {
+    setAutoRefresh(3000);
+  }
+}
+
+function startAutoRefreshTimer() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  if (autoRefreshInterval <= 0) return;
+
+  autoRefreshTimer = setInterval(async () => {
+    if (document.hidden || autoRefreshPaused || state.speedtestRunning) return;
+    try {
+      await refresh(true);
+    } catch (_) {}
+  }, autoRefreshInterval);
+}
+
+async function refresh(isLive = false) {
   const btn = $("btnRefresh");
-  btn.classList.add("spin");
-  $("subtitle").textContent = "Scanning your interfaces…";
-  $("adapters").innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+  if (!isLive) {
+    btn.classList.add("spin");
+    $("subtitle").textContent = "Scanning your interfaces…";
+    $("adapters").innerHTML = '<div class="skeleton"></div><div class="skeleton"></div>';
+  }
   try {
     const list = (await go().GetAdapters()) || [];
+    const prevAdapters = state.adapters || [];
     state.adapters = list;
     state.gateways = [...new Set(list.flatMap((a) => a.gateway))];
     populateSpeedtestAdapters($("stAdapterSelect") ? $("stAdapterSelect").value : null);
     $("adapterCount").textContent = list.length;
     $("subtitle").textContent = list.length
-      ? `${list.length} active adapter${list.length > 1 ? "s" : ""} · updated ${new Date().toLocaleTimeString()}`
+      ? `${list.length} active adapter${list.length > 1 ? "s" : ""} · ${isLive ? "live " : ""}updated ${new Date().toLocaleTimeString()}`
       : "No active adapters";
+
+    if (isLive && prevAdapters.length === list.length && list.length > 0) {
+      let canPatch = true;
+      for (const a of list) {
+        if (!document.querySelector(`.card[data-alias="${CSS.escape(a.alias)}"]`)) {
+          canPatch = false;
+          break;
+        }
+      }
+      if (canPatch) {
+        // In-place smooth DOM patch
+        for (const a of list) {
+          const card = document.querySelector(`.card[data-alias="${CSS.escape(a.alias)}"]`);
+          if (!card) continue;
+          const badge = card.querySelector(".status-badge");
+          if (badge && badge.textContent !== (a.status || "Up")) badge.textContent = a.status || "Up";
+
+          const rowsEl = card.querySelector(".rows");
+          const newRows =
+            row("IPv4", valChips(a.ipv4, "v4")) +
+            row("IPv6", valChips(a.ipv6, "v6")) +
+            row("Gateway", valChips(a.gateway, "gw")) +
+            row("DNS", valChips(a.dns, "")) +
+            row("MAC", a.mac ? valChips([a.mac], "") : "") +
+            row("Link speed", a.linkSpeed ? `<span class="val" data-copy="${esc(a.linkSpeed)}">${esc(a.linkSpeed)}</span>` : "");
+          if (rowsEl && rowsEl.innerHTML !== newRows) {
+            rowsEl.innerHTML = newRows;
+          }
+
+          if (a.isWifi && a.wifi) {
+            const w = a.wifi;
+            const ssidEl = card.querySelector(".wifi-ssid");
+            if (ssidEl && ssidEl.textContent !== (w.ssid || "Wi-Fi")) ssidEl.textContent = w.ssid || "Wi-Fi";
+            const bandEl = card.querySelector(".wifi-band");
+            if (bandEl && bandEl.textContent !== (w.band || "–")) bandEl.textContent = w.band || "–";
+            const chanEl = card.querySelector(".wifi-channel");
+            if (chanEl && chanEl.textContent !== (w.channel || "–")) chanEl.textContent = w.channel || "–";
+            const widthEl = card.querySelector(".wifi-width");
+            if (widthEl && widthEl.textContent !== (w.channelWidth || "–")) widthEl.textContent = w.channelWidth || "–";
+            const rxEl = card.querySelector(".wifi-rx");
+            if (rxEl) rxEl.textContent = `${w.rxRate || "–"} Mbps`;
+            const txEl = card.querySelector(".wifi-tx");
+            if (txEl) txEl.textContent = `${w.txRate || "–"} Mbps`;
+            const sigEl = card.querySelector(".wifi-sig");
+            if (sigEl) {
+              sigEl.innerHTML = `<span>${esc(w.signal || "–")}${w.signalDbm ? ` <span class="sig-dbm">(${esc(w.signalDbm)})</span>` : ""}</span> ${signalBars(w.signal)}`;
+            }
+          }
+        }
+        return;
+      }
+    }
+
     $("adapters").innerHTML = list.length
       ? list.map(adapterCard).join("")
       : '<div class="empty">No active UP adapters with IP addresses found.</div>';
   } catch (e) {
-    $("adapterCount").textContent = "0";
-    $("subtitle").textContent = "Scan failed";
-    $("adapters").innerHTML = `<div class="empty err">${esc(e && e.message ? e.message : e)}</div>`;
+    if (!isLive) {
+      $("adapterCount").textContent = "0";
+      $("subtitle").textContent = "Scan failed";
+      $("adapters").innerHTML = `<div class="empty err">${esc(e && e.message ? e.message : e)}</div>`;
+    }
   } finally {
-    btn.classList.remove("spin");
+    if (!isLive) {
+      btn.classList.remove("spin");
+    }
     syncChips();
   }
 }
@@ -963,7 +1071,8 @@ async function toggleSpeedtest() {
 
 // ------------------------------------------------------------- wiring
 function init() {
-  $("btnRefresh").onclick = refresh;
+  $("btnRefresh").onclick = () => refresh(false);
+  if ($("btnAutoRefresh")) $("btnAutoRefresh").onclick = cycleAutoRefresh;
   $("btnCopyAll").onclick = () => copy(adaptersAsText(), "Adapter info copied");
   $("btnExit").onclick = () => go().Quit();
   $("wClose").onclick = () => go().Quit();
@@ -1230,9 +1339,19 @@ function init() {
     }
   });
 
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      autoRefreshPaused = true;
+    } else {
+      autoRefreshPaused = false;
+      if (autoRefreshInterval > 0) refresh(true);
+    }
+  });
+
   switchTestTab("ping");
   syncChips();
   refresh();
+  startAutoRefreshTimer();
 }
 
 // Wails injects window.go / window.runtime slightly after load.

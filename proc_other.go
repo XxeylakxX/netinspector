@@ -9,3 +9,7 @@ func hideWindow(cmd *exec.Cmd) {}
 func queryChannelWidth(targetBssid, targetSsid string) string {
 	return ""
 }
+
+func nativeWlanInfo() *WiFi {
+	return nil
+}

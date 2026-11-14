@@ -206,6 +206,54 @@ svg { width: 18px; height: 18px; flex: none; }
   background: rgba(124,140,255,0.16); color: #aab4ff;
 }
 
+.auto-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: all .2s;
+  user-select: none;
+}
+.auto-btn:hover {
+  background: var(--glass-2);
+  color: var(--text);
+  border-color: rgba(255,255,255,0.22);
+}
+.auto-btn.on {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.35);
+  color: var(--green);
+}
+.auto-btn.off {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border);
+  color: var(--muted);
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+  animation: pulse-dot 2s infinite;
+}
+.auto-btn.off .live-dot {
+  background: var(--muted);
+  box-shadow: none;
+  animation: none;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.85); }
+}
+
 .glass {
   background: rgba(14, 18, 34, 0.76);
   border: 1px solid var(--border);

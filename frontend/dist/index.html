@@ -62,8 +62,14 @@
       <!-- Adapters -->
       <section class="panel">
         <div class="panel-head">
-          <h2>Active adapters</h2>
-          <span class="count" id="adapterCount">–</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <h2>Active adapters</h2>
+            <span class="count" id="adapterCount">–</span>
+          </div>
+          <button class="auto-btn on" id="btnAutoRefresh" title="Click to cycle Live Refresh: 3s, 5s, Off">
+            <span class="live-dot"></span>
+            <span id="autoRefreshLabel">Live: 3s</span>
+          </button>
         </div>
         <div class="scroll" id="adapters"></div>
       </section>
