@@ -35,6 +35,7 @@ const state = {
   speedtestServers: [],
   fastServers: [],
   ooklaServers: [],
+  signalStats: {},
 };
 
 // ------------------------------------------------------------- toasts
@@ -59,10 +60,54 @@ async function copy(text, label = "Copied") {
 }
 
 // ----------------------------------------------------------- adapters
-function signalBars(sig) {
-  const pct = parseInt(sig, 10);
+function getSignalColor(pct) {
+  const p = parseInt(pct, 10);
+  if (isNaN(p)) return "var(--muted)";
+  const clamped = Math.max(0, Math.min(100, p));
+  // 100% -> hue 125 (vibrant green), 60% -> hue 60 (yellow), 0% -> hue 0 (red)
+  const hue = Math.round((clamped / 100) * 125);
+  return `hsl(${hue}, 88%, 52%)`;
+}
+
+function signalBars(sig, pctNum) {
+  const pct = !isNaN(pctNum) ? pctNum : parseInt(sig, 10);
   const on = isNaN(pct) ? 0 : pct >= 80 ? 4 : pct >= 60 ? 3 : pct >= 35 ? 2 : pct > 0 ? 1 : 0;
-  return `<div class="signal" title="${esc(sig)}">${[1, 2, 3, 4].map((i) => `<i class="${i <= on ? "on" : ""}"></i>`).join("")}</div>`;
+  const col = getSignalColor(pct);
+  return `<div class="signal" title="${esc(sig)}">${[1, 2, 3, 4]
+    .map(
+      (i) =>
+        `<i class="${i <= on ? "on" : ""}" style="${
+          i <= on ? `background:${col};box-shadow:0 0 6px ${col}88;` : ""
+        }"></i>`
+    )
+    .join("")}</div>`;
+}
+
+function updateSignalStats(alias, wifi) {
+  if (!wifi || !wifi.signal) return null;
+  const pct = parseInt(wifi.signal, 10);
+  if (isNaN(pct)) return null;
+
+  let stats = state.signalStats[alias];
+  if (!stats) {
+    stats = {
+      minPct: pct,
+      maxPct: pct,
+      minDbm: wifi.signalDbm || "",
+      maxDbm: wifi.signalDbm || ""
+    };
+    state.signalStats[alias] = stats;
+  } else {
+    if (pct < stats.minPct) {
+      stats.minPct = pct;
+      stats.minDbm = wifi.signalDbm || stats.minDbm;
+    }
+    if (pct > stats.maxPct) {
+      stats.maxPct = pct;
+      stats.maxDbm = wifi.signalDbm || stats.maxDbm;
+    }
+  }
+  return stats;
 }
 
 function valChips(list, cls) {
@@ -83,6 +128,49 @@ function adapterCard(a, i) {
     row("MAC", a.mac ? valChips([a.mac], "") : "") +
     row("Link speed", a.linkSpeed ? `<span class="val" data-copy="${esc(a.linkSpeed)}">${esc(a.linkSpeed)}</span>` : "");
 
+  let wifiSigCell = "";
+  if (wifi) {
+    const stats = updateSignalStats(a.alias, wifi);
+    const pct = parseInt(wifi.signal, 10);
+    const col = getSignalColor(pct);
+    const loCol = stats ? getSignalColor(stats.minPct) : col;
+    const hiCol = stats ? getSignalColor(stats.maxPct) : col;
+
+    wifiSigCell = `
+      <div class="wifi-sig-cell">
+        <div class="wifi-sig-head">
+          <span>Signal</span>
+          ${
+            stats
+              ? `<span class="sig-extremes" title="Lowest: ${stats.minPct}%${stats.minDbm ? ` (${stats.minDbm})` : ""} · Highest: ${stats.maxPct}%${stats.maxDbm ? ` (${stats.maxDbm})` : ""}">
+                   <span class="sig-lo">L: <b style="color:${loCol}">${stats.minPct}%</b></span>
+                   <span class="sig-sep">·</span>
+                   <span class="sig-hi">H: <b style="color:${hiCol}">${stats.maxPct}%</b></span>
+                 </span>`
+              : ""
+          }
+        </div>
+        <b class="wifi-sig" style="display:flex;gap:8px;align-items:center;justify-content:space-between">
+          <span>
+            <span class="sig-val" style="color:${col}">${esc(wifi.signal || "–")}</span>
+            ${wifi.signalDbm ? ` <span class="sig-dbm">(${esc(wifi.signalDbm)})</span>` : ""}
+          </span>
+          ${signalBars(wifi.signal, pct)}
+        </b>
+        <div class="sig-meter" title="Signal: ${isNaN(pct) ? 0 : pct}% (Low: ${stats ? stats.minPct : 0}%, High: ${stats ? stats.maxPct : 0}%)">
+          <div class="sig-meter-track"></div>
+          <div class="sig-meter-fill" style="width:${isNaN(pct) ? 0 : pct}%;"></div>
+          ${
+            stats
+              ? `<div class="sig-marker low" style="left:${stats.minPct}%;" title="Lowest: ${stats.minPct}%"></div>
+                 <div class="sig-marker high" style="left:${stats.maxPct}%;" title="Highest: ${stats.maxPct}%"></div>`
+              : ""
+          }
+          <div class="sig-marker cur" style="left:${isNaN(pct) ? 0 : pct}%; background:${col};" title="Current: ${isNaN(pct) ? 0 : pct}%"></div>
+        </div>
+      </div>`;
+  }
+
   const wifiBox = wifi
     ? `<div class="wifi-box">
          <div class="wifi-head">
@@ -95,7 +183,7 @@ function adapterCard(a, i) {
            <div><span>Channel Width</span><b class="wifi-width">${esc(wifi.channelWidth || "–")}</b></div>
            <div><span>Receive</span><b class="wifi-rx">${esc(wifi.rxRate || "–")} Mbps</b></div>
            <div><span>Transmit</span><b class="wifi-tx">${esc(wifi.txRate || "–")} Mbps</b></div>
-           <div><span>Signal</span><b class="wifi-sig" style="display:flex;gap:8px;align-items:center"><span>${esc(wifi.signal || "–")}${wifi.signalDbm ? ` <span class="sig-dbm">(${esc(wifi.signalDbm)})</span>` : ""}</span> ${signalBars(wifi.signal)}</b></div>
+           ${wifiSigCell}
            <div class="wifi-span-all"><span>Security</span><b class="wifi-auth">${esc(wifi.auth || "–")}</b></div>
          </div>
        </div>`
@@ -226,6 +314,10 @@ async function refresh(isLive = false) {
 
           if (a.isWifi && a.wifi) {
             const w = a.wifi;
+            const stats = updateSignalStats(a.alias, w);
+            const pct = parseInt(w.signal, 10);
+            const col = getSignalColor(pct);
+
             const ssidEl = card.querySelector(".wifi-ssid");
             if (ssidEl && ssidEl.textContent !== (w.ssid || "Wi-Fi")) ssidEl.textContent = w.ssid || "Wi-Fi";
             const bandEl = card.querySelector(".wifi-band");
@@ -238,9 +330,60 @@ async function refresh(isLive = false) {
             if (rxEl) rxEl.textContent = `${w.rxRate || "–"} Mbps`;
             const txEl = card.querySelector(".wifi-tx");
             if (txEl) txEl.textContent = `${w.txRate || "–"} Mbps`;
-            const sigEl = card.querySelector(".wifi-sig");
-            if (sigEl) {
-              sigEl.innerHTML = `<span>${esc(w.signal || "–")}${w.signalDbm ? ` <span class="sig-dbm">(${esc(w.signalDbm)})</span>` : ""}</span> ${signalBars(w.signal)}`;
+
+            // Signal value and color
+            const sigValEl = card.querySelector(".sig-val");
+            if (sigValEl) {
+              sigValEl.textContent = w.signal || "–";
+              sigValEl.style.color = col;
+            }
+            const sigDbmEl = card.querySelector(".sig-dbm");
+            if (sigDbmEl) {
+              sigDbmEl.textContent = w.signalDbm ? `(${w.signalDbm})` : "";
+            }
+            const sigBarsEl = card.querySelector(".signal");
+            if (sigBarsEl) {
+              sigBarsEl.outerHTML = signalBars(w.signal, pct);
+            }
+
+            // Low / High and meter update
+            if (stats) {
+              const loCol = getSignalColor(stats.minPct);
+              const hiCol = getSignalColor(stats.maxPct);
+              const loEl = card.querySelector(".sig-lo b");
+              if (loEl) {
+                loEl.textContent = `${stats.minPct}%`;
+                loEl.style.color = loCol;
+              }
+              const hiEl = card.querySelector(".sig-hi b");
+              if (hiEl) {
+                hiEl.textContent = `${stats.maxPct}%`;
+                hiEl.style.color = hiCol;
+              }
+              const extremesEl = card.querySelector(".sig-extremes");
+              if (extremesEl) {
+                extremesEl.title = `Lowest: ${stats.minPct}%${stats.minDbm ? ` (${stats.minDbm})` : ""} · Highest: ${stats.maxPct}%${stats.maxDbm ? ` (${stats.maxDbm})` : ""}`;
+              }
+
+              const fillEl = card.querySelector(".sig-meter-fill");
+              if (fillEl) fillEl.style.width = `${isNaN(pct) ? 0 : pct}%`;
+
+              const curMarker = card.querySelector(".sig-marker.cur");
+              if (curMarker) {
+                curMarker.style.left = `${isNaN(pct) ? 0 : pct}%`;
+                curMarker.style.background = col;
+                curMarker.title = `Current: ${isNaN(pct) ? 0 : pct}%`;
+              }
+              const lowMarker = card.querySelector(".sig-marker.low");
+              if (lowMarker) {
+                lowMarker.style.left = `${stats.minPct}%`;
+                lowMarker.title = `Lowest: ${stats.minPct}%`;
+              }
+              const highMarker = card.querySelector(".sig-marker.high");
+              if (highMarker) {
+                highMarker.style.left = `${stats.maxPct}%`;
+                highMarker.title = `Highest: ${stats.maxPct}%`;
+              }
             }
           }
         }
@@ -277,8 +420,10 @@ function adaptersAsText() {
       if (a.mac) L.push(`MAC    : ${a.mac}`);
       if (a.isWifi && a.wifi) {
         const w = a.wifi;
+        const stats = state.signalStats[a.alias];
+        const extremes = stats ? ` [Low: ${stats.minPct}%${stats.minDbm ? ` (${stats.minDbm})` : ""} / High: ${stats.maxPct}%${stats.maxDbm ? ` (${stats.maxDbm})` : ""}]` : "";
         L.push("--- Wi-Fi ---", `SSID      : ${w.ssid}`, `Standard  : ${w.standard}`, `Frequency : ${w.band}`,
-          `Channel   : ${w.channel}`, `Width     : ${w.channelWidth || "–"}`, `Speed R/T : ${w.rxRate} / ${w.txRate} Mbps`, `Signal    : ${w.signal}${w.signalDbm ? ` (${w.signalDbm})` : ""}`);
+          `Channel   : ${w.channel}`, `Width     : ${w.channelWidth || "–"}`, `Speed R/T : ${w.rxRate} / ${w.txRate} Mbps`, `Signal    : ${w.signal}${w.signalDbm ? ` (${w.signalDbm})` : ""}${extremes}`);
       }
       return L.join("\n");
     })
